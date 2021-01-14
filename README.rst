@@ -806,6 +806,14 @@ described as an object of libpq key: value connection info pairs or libpq
 connection string or a ``postgres://`` connection uri. If for example you'd
 like to use a streaming replication slot use the syntax {... "slot": "slotname"}.
 
+``primary_node`` (no default)
+
+A primary node can be described as an object of libpq key: value connection
+info pairs or libpq connection string or a ``postgres://`` connection uri.
+
+A primary node is optional and can be provided if the `nodes` are pointing
+to standby instances, where switching xlog is not supported.
+
 ``pg_bin_directory`` (default: find binaries from well-known directories)
 
 Site-specific option for finding ``pg_basebackup`` and ``pg_receivexlog``

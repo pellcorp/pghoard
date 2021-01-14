@@ -66,13 +66,15 @@ class PGBaseBackup(Thread):
         transfer_queue=None,
         callback_queue=None,
         pg_version_server=None,
-        metadata=None
+        metadata=None,
+        primary_connection_info=None
     ):
         super().__init__()
         self.log = logging.getLogger("PGBaseBackup")
         self.config = config
         self.site = site
         self.connection_info = connection_info
+        self.primary_connection_info = primary_connection_info
         self.basebackup_path = basebackup_path
         self.callback_queue = callback_queue
         self.chunks_on_disk = 0
@@ -282,7 +284,8 @@ class PGBaseBackup(Thread):
 
         # support xlog switching if at least postgresql 9.6
         if self.pg_version_server >= 90600:
-            connection_string = connection_string_using_pgpass(self.connection_info)
+            # if primary connection is available use that
+            connection_string = connection_string_using_pgpass(self.primary_connection_info or self.connection_info)
             with psycopg2.connect(connection_string) as db_conn:
                 backup_end_wal_segment, backup_end_time = self.get_backup_end_segment_and_time(db_conn, "non-exclusive")
 
@@ -744,7 +747,15 @@ class PGBaseBackup(Thread):
 
             backup_label_data = backup_label.encode("utf-8")
             backup_start_wal_segment, backup_start_time = self.parse_backup_label(backup_label_data)
-            backup_end_wal_segment, backup_end_time = self.get_backup_end_segment_and_time(db_conn, backup_mode)
+
+            if not self.primary_connection_info:
+                backup_end_wal_segment, backup_end_time = self.get_backup_end_segment_and_time(db_conn, backup_mode)
+
+        # where there is a primary node configured do the xlog switch via the primary node
+        if self.primary_connection_info:
+            connection_string = connection_string_using_pgpass(self.primary_connection_info)
+            with psycopg2.connect(connection_string) as db_conn:
+                backup_end_wal_segment, backup_end_time = self.get_backup_end_segment_and_time(db_conn, backup_mode)
 
         # Generate and upload the metadata chunk
         metadata = {
